@@ -5,7 +5,7 @@
  * @format
  */
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import type {PropsWithChildren} from 'react';
 import {
   SafeAreaView,
@@ -15,6 +15,9 @@ import {
   Text,
   useColorScheme,
   View,
+  Modal,
+  Pressable,
+  Button
 } from 'react-native';
 
 import {
@@ -58,7 +61,11 @@ function Section({children, title}: SectionProps): JSX.Element {
 }
 
 function App(): JSX.Element {
+  const webView = useRef<WebView>(null);
+
   const isDarkMode = useColorScheme() === 'dark';
+
+  const [modalVisible, setModalVisible] = useState(false);
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
@@ -66,8 +73,29 @@ function App(): JSX.Element {
 
   function onMessage(event: any) {
     let data = JSON.parse(event.nativeEvent.data);
-    let { message } = { ...data };
+    let { message, action } = { ...data };
     console.log( message );
+    console.log( action );
+    switch (action) {
+      case "toggle":
+        let script = "document.getElementById('value').innerText = \""+message+"\"";
+        webView.current?.injectJavaScript(script);
+        break;
+      case "dismiss":
+        setModalVisible(false)
+        break;
+      default: break;
+    }
+  }
+
+  function doAddition() {
+    let script = `
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        "action": "addition",
+        "message": addition(2,3)
+      }));
+    `;
+    webView.current?.injectJavaScript(script);
   }
 
   const html = require('./resources/index.html');
@@ -76,25 +104,40 @@ function App(): JSX.Element {
             var _selector = document.querySelector('input[name=myCheckbox]');
             _selector.addEventListener('change', function(event) {
                 var message = (_selector.checked) ? "Toggle Switch is on" : "Toggle Switch is off";
-
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  "message": message
-                }));
-
+                let responseData = {
+                            "message": message,
+                            "action": "toggle"
+                        };
+                window.ReactNativeWebView.postMessage(JSON.stringify(responseData));
             });
         `;
 
   return(
-    <WebView
-        scalesPageToFit={false}
-        mixedContentMode="compatibility"
-        onMessage={onMessage}
-        originWhitelist={['*']}
-        useWebkit={true}
-        source={html}
-        javaScriptEnabled={true}
-        injectedJavaScript={jsCode} 
-        />
+    <View style={styles.centeredView}>
+    <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}>
+          <Button title='Addition' onPress={doAddition}/>
+          <WebView
+            ref={webView}
+            style={styles.modalView}
+            scalesPageToFit={false}
+            mixedContentMode="compatibility"
+            onMessage={onMessage}
+            originWhitelist={['*']}
+            useWebkit={true}
+            source={html}
+            javaScriptEnabled={true}
+            injectedJavaScript={jsCode} 
+            />
+      </Modal>
+      <Pressable
+        style={[styles.button, styles.buttonOpen]}
+        onPress={() => setModalVisible(true)}>
+        <Text style={styles.textStyle}>Show Modal</Text>
+      </Pressable>
+      </View>
   );
 
   // return (
@@ -132,21 +175,46 @@ function App(): JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 22,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
+  button: {
+    borderRadius: 20,
+    padding: 10,
+    elevation: 2,
   },
-  highlight: {
-    fontWeight: '700',
+  buttonOpen: {
+    backgroundColor: '#F194FF',
+  },
+  buttonClose: {
+    backgroundColor: '#2196F3',
+  },
+  textStyle: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: 'center',
   },
 });
 
